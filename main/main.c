@@ -270,42 +270,50 @@ void app_main(void) {
         //auto lights with delays
         
 
+        //turn lights on if light selector is on
         if (lights_off) {
             gpio_set_level(LOW_BEAMS, 0);
             lights = false;
-        } 
+        }
+        //turn lights off if light selector is off 
         else if (lights_on) {
             gpio_set_level(LOW_BEAMS, 1);
             lights = true;
         }
+        //if light selector is in auto mode
         else if (lights_auto) {
+            //if light selector was not previously in auto mode, turn lights off
             if (!lights_auto_prev) {
                 lights = false;
                 gpio_set_level(LOW_BEAMS, 0);
             }
+
+            //if lights are off, set the buffer timer to 0
             if (!lights && ambient_low && !ambient_low_prev) {
                 light_buffer = 0;
 
+            //if lights are on, set the buffer timer to 2000
             }
             else if (lights && !ambient_low && ambient_low_prev) {
                 light_buffer = 2000;
             }
             
-            if (ambient_low && !lights) {
+            //if it is dark outside and the lights are off
+            if (ambient_low && !lights) { //wait 1 second
                 if (light_buffer < 1000) {
                     light_buffer += LOOP_DELAY_MS;
                 }
-                else {
+                else {                  //turn the lights on
                     lights = true;
                     gpio_set_level(LOW_BEAMS, 1);
                     light_buffer = 2000;
                 }
             }
-            else if (!ambient_low && lights) {
-                if (light_buffer > 0) {
+            else if (!ambient_low && lights) { //if it is light outside and the lights are on
+                if (light_buffer > 0) {     //wait 2 seconds
                     light_buffer -= LOOP_DELAY_MS;
                 }
-                else {
+                else {              //turn lights off
                     lights = false;
                     gpio_set_level(LOW_BEAMS, 0);
                     light_buffer = 0;
@@ -313,9 +321,7 @@ void app_main(void) {
             }
             
         }
-
-        printf("%d\n", light_buffer);
-
+        
         vTaskDelay(  LOOP_DELAY_MS / portTICK_PERIOD_MS); //loop delay to prevent bouncy inputs
     }
 }
