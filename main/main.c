@@ -167,18 +167,14 @@ void app_main(void) {
     bool ignition_button = false;
     bool ignition = false;
     bool can_start = false;
-    int daylight_threshold = 200;
+    int dusk_threshold = 200;
+    int daylight_threshold = 500;
     int off_threshold = 3170/3;
     int auto_threshold = 2* (3170/3);
     bool lights_off;
-    bool lights_auto_prev = false;
     bool lights_auto = false;
     bool lights_on;
-    bool lights = false;
     int light_buffer = 0;
-
-    bool ambient_low_prev = false;
-    bool ambient_low = false;
 
 
     while(true) {
@@ -209,11 +205,8 @@ void app_main(void) {
 
         //update ADC states
         lights_off = off_threshold > pot && ignition;
-        lights_auto_prev = lights_auto;
         lights_auto = auto_threshold > pot && pot >= off_threshold && ignition;
         lights_on = pot >= auto_threshold && ignition;
-        ambient_low_prev = ambient_low;
-        ambient_low = light < daylight_threshold;
 
 
         //upate can_start variable based on current button states
@@ -271,55 +264,35 @@ void app_main(void) {
         
 
         //turn lights on if light selector is on
-        if (lights_off) {
+        if (!ignition) {
             gpio_set_level(LOW_BEAMS, 0);
-            lights = false;
+        }
+        else if (lights_off) {
+            gpio_set_level(LOW_BEAMS, 0);
         }
         //turn lights off if light selector is off 
         else if (lights_on) {
             gpio_set_level(LOW_BEAMS, 1);
-            lights = true;
         }
         //if light selector is in auto mode
         else if (lights_auto) {
-            //if light selector was not previously in auto mode, turn lights off
-            if (!lights_auto_prev) {
-                lights = false;
+            if (light > dusk_threshold && light < daylight_threshold) {     //if between dusk and day threshold, reset buffer
+                light_buffer = 0;
+            }
+
+            else if (light < dusk_threshold && light_buffer < 1000) {       //if under dusk threshold, wait 1 sec
+                light_buffer += LOOP_DELAY_MS;
+            }
+            else if (light > daylight_threshold && light_buffer > -2000) {  //if over daylight threshold, wait 2 sec
+                light_buffer -=LOOP_DELAY_MS;
+            }
+
+            if (light_buffer == 1000) {     //turn lights on if dark for 1 sec
+                gpio_set_level(LOW_BEAMS, 1);
+            }
+            if (light_buffer == -2000) {        //turn lights off if bright for 2 sec
                 gpio_set_level(LOW_BEAMS, 0);
             }
-
-            //if lights are off, set the buffer timer to 0
-            if (!lights && ambient_low && !ambient_low_prev) {
-                light_buffer = 0;
-
-            //if lights are on, set the buffer timer to 2000
-            }
-            else if (lights && !ambient_low && ambient_low_prev) {
-                light_buffer = 2000;
-            }
-            
-            //if it is dark outside and the lights are off
-            if (ambient_low && !lights) { //wait 1 second
-                if (light_buffer < 1000) {
-                    light_buffer += LOOP_DELAY_MS;
-                }
-                else {                  //turn the lights on
-                    lights = true;
-                    gpio_set_level(LOW_BEAMS, 1);
-                    light_buffer = 2000;
-                }
-            }
-            else if (!ambient_low && lights) { //if it is light outside and the lights are on
-                if (light_buffer > 0) {     //wait 2 seconds
-                    light_buffer -= LOOP_DELAY_MS;
-                }
-                else {              //turn lights off
-                    lights = false;
-                    gpio_set_level(LOW_BEAMS, 0);
-                    light_buffer = 0;
-                }
-            }
-            
         }
         
         vTaskDelay(  LOOP_DELAY_MS / portTICK_PERIOD_MS); //loop delay to prevent bouncy inputs
